@@ -16,7 +16,6 @@ This will create the `lingua` executable.
 
 ```bash
 lingua                 # A random tongue twister, new every time
-lingua -p              # Practise a twister: type it back, as fast as you can
 lingua -f              # A funny joke about speech or language
 lingua -h              # Show help
 lingua --twisters FILE # Use a different twisters file

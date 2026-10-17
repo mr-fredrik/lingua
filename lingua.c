@@ -524,10 +524,8 @@ static void seed_random(void) {
     }
 }
 
-/* Pick an entry at random, but never the one we showed last time.
- * There is no state file for practice mode, so it picks freely. */
-static size_t pick_index(const char *state_path, size_t count,
-                         int remember) {
+/* Pick an entry at random, but never the one we showed last time. */
+static size_t pick_index(const char *state_path, size_t count) {
     long last;
     size_t index;
 
@@ -535,23 +533,21 @@ static size_t pick_index(const char *state_path, size_t count,
         return 0;
     }
 
-    last = remember ? recall_last(state_path) : -1;
+    last = recall_last(state_path);
     index = (size_t)rand() % count;
 
     /* With two or more entries there is always another one to pick. */
     if (count > 1 && last >= 0 && (long)index == last) {
         index = (index + 1) % count;
     }
-    if (remember) {
-        remember_last(state_path, (long)index);
-    }
+    remember_last(state_path, (long)index);
     return index;
 }
 
 /* Load a data file, choose one entry and return a copy of it.
  * Prints a friendly message and returns NULL if that is not possible. */
 static char *pick_one(const char *given, const char *name, const char *label,
-                      const char *state_name, int remember) {
+                      const char *state_name) {
     EntryList list;
     char *path = find_data_file(given, name);
     char *state_path = NULL;
@@ -562,9 +558,7 @@ static char *pick_one(const char *given, const char *name, const char *label,
     if (path == NULL) {
         return NULL;
     }
-    if (remember) {
-        state_path = state_file(state_name);
-    }
+    state_path = state_file(state_name);
 
     status = load_entries(path, &list);
     if (status != 0) {
@@ -588,7 +582,7 @@ static char *pick_one(const char *given, const char *name, const char *label,
     }
 
     /* Pick an entry, and remember the choice for next time. */
-    index = pick_index(state_path, list.count, remember);
+    index = pick_index(state_path, list.count);
     text = strdup(list.entries[index].text);
 
     free(state_path);
@@ -597,145 +591,10 @@ static char *pick_one(const char *given, const char *name, const char *label,
     return text;
 }
 
-/*
- * Practice mode
- * -------------
- */
-
-/* Read a line of typing from the keyboard. The buffer grows as needed, so a
- * very long answer is never cut short or run over.
- * Returns a new string that the caller must free, or NULL if the memory ran
- * out or the keyboard gave us nothing at all. */
-static char *read_answer(void) {
-    Text answer;
-    int c;
-
-    text_start(&answer);
-    if (text_reserve(&answer, 1) != 0) {
-        return NULL;
-    }
-
-    while ((c = getchar()) != EOF && c != '\n') {
-        if (text_reserve(&answer, 1) != 0) {
-            text_free(&answer);
-            return NULL;
-        }
-        answer.data[answer.len++] = (char)c;
-        answer.data[answer.len] = '\0';
-    }
-    answer.data[answer.len] = '\0';
-
-    /* ferror() means something went wrong reading the keyboard. */
-    if (ferror(stdin)) {
-        text_free(&answer);
-        return NULL;
-    }
-    if (c == EOF && answer.len == 0) {
-        text_free(&answer);
-        return NULL;
-    }
-    return answer.data;
-}
-
-/* Are these two pieces of text the same when only the words count?
- * Capitals, punctuation and any extra spaces are ignored. */
-static int same_words(const char *a, const char *b) {
-    size_t i = 0;
-    size_t j = 0;
-
-    for (;;) {
-        /* Move along to the next word in each text. */
-        while (a[i] != '\0' && !isalnum((unsigned char)a[i])) {
-            i++;
-        }
-        while (b[j] != '\0' && !isalnum((unsigned char)b[j])) {
-            j++;
-        }
-
-        /* Both texts must run out together: if one has words left, they do
-         * not match. */
-        if (a[i] == '\0' || b[j] == '\0') {
-            return a[i] == '\0' && b[j] == '\0';
-        }
-        if (tolower((unsigned char)a[i]) != tolower((unsigned char)b[j])) {
-            return 0;
-        }
-        i++;
-        j++;
-    }
-}
-
-/* A clock for timing practice, in seconds. The monotonic clock keeps going
- * even if the system clock is changed underneath us. */
-static double seconds_now(void) {
-    struct timespec now;
-
-    if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) {
-        return (double)time(NULL);
-    }
-    return (double)now.tv_sec + (double)now.tv_nsec / 1000000000.0;
-}
-
-/* Something gentle to say when the answer is not quite right. */
-static const char *gentle_nudge(void) {
-    static const char *nudges[] = {
-        "Not quite, have another go!",
-        "Nearly! Tricky one, isn't it? Try again.",
-        "Oh dear, that one got away. Go again!",
-        "So close! Have another go, you are nearly there.",
-        "Nearly there! Read it once more, then try again."
-    };
-
-    return nudges[(size_t)rand() % (sizeof(nudges) / sizeof(nudges[0]))];
-}
-
-/* Show a twister and let the user type it back, over and over, getting
- * quicker. An empty line finishes. */
-static void practice_mode(const char *twister) {
-    double best = 0.0; /* quickest time so far, 0 means none yet */
-
-    printf("%s\n", twister);
-    printf("Type it back and press Enter. An empty line finishes.\n");
-
-    for (;;) {
-        double start = seconds_now();
-        double took;
-        char *answer = read_answer();
-
-        if (answer == NULL) {
-            printf("\nCheerio! Do come back and practise again.\n");
-            return;
-        }
-        if (answer[0] == '\0') {
-            printf("Cheerio! Keep those vowels warm.\n");
-            free(answer);
-            return;
-        }
-
-        took = seconds_now() - start;
-        if (same_words(twister, answer)) {
-            printf("Brilliant! You said it in %.1f seconds.", took);
-            if (best == 0.0 || took < best) {
-                if (best > 0.0) {
-                    printf(" A new best!");
-                }
-                best = took;
-            }
-            printf("\nLovely stuff. Have another go, quicker this time.\n\n");
-        } else {
-            printf("%s\n\n", gentle_nudge());
-            /* Show the twister again so it is on screen for the next go. */
-            printf("%s\n", twister);
-        }
-        free(answer);
-    }
-}
-
 static void print_help(void) {
     printf("Usage: lingua [options]\n");
     printf("\n");
     printf("  lingua                 a random tongue twister (new every time)\n");
-    printf("  lingua -p              a random twister, then practise it\n");
     printf("  lingua -f              a funny joke about speech or language\n");
     printf("  lingua -h              this help\n");
     printf("  lingua --twisters FILE use a different twisters file\n");
@@ -757,7 +616,6 @@ static const char *file_after_option(const char *option, int argc,
 }
 
 int main(int argc, char **argv) {
-    int practise = 0;
     int funny = 0;
     const char *twisters_file = NULL;
     const char *jokes_file = NULL;
@@ -770,8 +628,6 @@ int main(int argc, char **argv) {
         if (strcmp(arg, "-h") == 0 || strcmp(arg, "--help") == 0) {
             print_help();
             return 0;
-        } else if (strcmp(arg, "-p") == 0) {
-            practise = 1;
         } else if (strcmp(arg, "-f") == 0) {
             funny = 1;
         } else if (strcmp(arg, "--twisters") == 0) {
@@ -791,18 +647,10 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (funny && practise) {
-        fprintf(stderr,
-                "A joke and a twister in one breath? Brilliant, but I\n");
-        fprintf(stderr,
-                "can only do one at a time. Try -f or -p on its own.\n");
-        return 1;
-    }
-
     seed_random();
 
     if (funny) {
-        text = pick_one(jokes_file, "jokes.txt", "joke", "last-joke", 1);
+        text = pick_one(jokes_file, "jokes.txt", "joke", "last-joke");
         if (text == NULL) {
             return 1;
         }
@@ -811,20 +659,12 @@ int main(int argc, char **argv) {
         return 0;
     }
 
-    /* Practice mode picks freely: an empty line should not turn into the
-     * same twister again. */
-    text = pick_one(twisters_file, "twisters.txt", "twister", "last-twister",
-                    !practise);
+    text = pick_one(twisters_file, "twisters.txt", "twister", "last-twister");
     if (text == NULL) {
         return 1;
     }
 
-    if (practise) {
-        practice_mode(text);
-    } else {
-        printf("%s\n", text);
-        printf("Have a go three times, then try it twice as fast.\n");
-    }
+    printf("%s\n", text);
     free(text);
     return 0;
 }

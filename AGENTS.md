@@ -103,7 +103,6 @@ then exit with a non-zero code.
 
 ```
 lingua                 a random tongue twister (new every time)
-lingua -p              a random twister, then practise it
 lingua -f              a funny joke about speech or language (no twister)
 lingua -h              help
 lingua --twisters FILE use a different twisters file
@@ -126,18 +125,7 @@ lingua --jokes FILE    use a different jokes file
     carry on silently without it.
 - **Joke mode (`-f`):** show one random joke from `jokes.txt` and
   **do not** show a twister. Apply the same "different each time" rules
-  as above. `-f` and `-p` together are not allowed: print a friendly
-  message explaining why.
-- **Practice mode (`-p`):**
-  - Show the random twister, then let the user type it back and press
-    Enter.
-  - Compare it with the original **ignoring capital letters,
-    punctuation and extra spaces**, so only the words matter.
-  - If it is correct, say so (for example "Brilliant!") and show how many
-    seconds it took, then let them try again, faster.
-  - If it is wrong, show a gentle, funny message and let them retry.
-    Never be harsh.
-  - An empty line ends practice with a friendly goodbye ("Cheerio!").
+  as above. `-f` cannot be combined with anything else.
 - The output should be short, clean and a little fun.
 
 ## Code style
@@ -159,14 +147,13 @@ lingua --jokes FILE    use a different jokes file
 make            # builds ./lingua
 ./lingua        # a random twister
 ./lingua -f     # a funny joke
-./lingua -p     # practise a twister
 make install    # optional: installs to ~/.local/bin and ~/.local/share/lingua
 ```
 
 Before finishing any change:
 
 1. It compiles with no warnings.
-2. `./lingua`, `./lingua -f`, `./lingua -p` and `./lingua -h` all work.
+2. `./lingua`, `./lingua -f` and `./lingua -h` all work.
 3. Running `./lingua` several times gives different twisters, and never
    the same one twice in a row.
 4. It works with data files that have 1 entry, many entries, and a
